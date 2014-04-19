@@ -50,6 +50,7 @@ public class Individu {
 				//System.out.println("apply mutation");
 			}
 		}
+		
 	}
 	
 	public void draw() {

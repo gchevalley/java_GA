@@ -61,7 +61,7 @@ public class Population {
 			if (oRandom.nextDouble() <= this.p_crossover) {
 				//crossover
 				this.nbre_crossover++;
-				two_kids = crossover(parent1, parent2);
+				two_kids = crossover(parent1, parent2, 4);
 				kid1 = two_kids[0];
 				kid2 = two_kids[1];
 			} else {
@@ -201,38 +201,102 @@ public Population selection_tournoi_with_elite(int tournament_size, double pct_t
 	}
 	
 	
-	public Individu[] crossover(Individu oI1, Individu oI2) {
-		return crossover_1part(oI1, oI2);
-	}
-	
-	
-	public Individu[] crossover_1part(Individu oI1, Individu oI2) {
+	public Individu[] crossover(Individu oI1, Individu oI2, int nbre_separator) {
 		
 		Random oRandom = new Random();
 		
-		int separator =  oRandom.nextInt(oI1.binchain.length-1)+1;
+		int[] idx_part = new int[nbre_separator];
+		
+		int tmp_separator=-1;
+		for (int i=0; i<nbre_separator; i++) {
+			
+			boolean found_dublicate;
+			found_dublicate = true;
+			
+			while (found_dublicate) {
+				tmp_separator =  oRandom.nextInt(oI1.binchain.length-1)+1;
+				found_dublicate = false;
+				
+				for (int j=i-1; j>0; j--) {
+					if (idx_part[j] == tmp_separator) {
+						found_dublicate = true;
+						break;
+					}
+				}
+			}
+			
+			idx_part[i] = tmp_separator;
+			
+		}
+		
+		
+		//sort idx_separator
+		int idx_min_separator;
+		int min_separator;
+		for (int i=0; i<nbre_separator; i++) {
+			
+			idx_min_separator = i;
+			min_separator = idx_part[i];
+			
+			for (int j=i+1; j<nbre_separator; j++) {
+				if (idx_part[j] < min_separator) {
+					min_separator = idx_part[j];
+					idx_min_separator = j;
+				}
+			}
+			
+			if (idx_min_separator != i) {
+				tmp_separator = idx_part[i];
+				idx_part[i] = idx_part[idx_min_separator];
+				idx_part[idx_min_separator] = tmp_separator;
+			}
+			
+		}
+		
+		
 		
 		int[] newbinchar1 = new int[oI1.binchain.length];
 		int[] newbinchar2 = new int[oI1.binchain.length];
 		
-		for (int i=0; i<oI1.binchain.length; i++) {
-			if (i < separator) {
-				newbinchar1[i] = oI1.binchain[i];
-				newbinchar2[i] = oI2.binchain[i];
+		int interval_from;
+		int interval_to = 0;
+		for (int i=0; i<nbre_separator+1; i++) {
+			
+			if (i>0) {
+				interval_from = idx_part[i-1];
 			} else {
-				newbinchar1[i] = oI2.binchain[i];
-				newbinchar2[i] = oI1.binchain[i];
+				interval_from = 0;
 			}
+			
+			if ((i) == idx_part.length) {
+				interval_to = oI1.binchain.length-1;
+			}  else {
+				interval_to = idx_part[i]-1;
+			}
+			
+			for (int j=0; j<oI1.binchain.length; j++) {
+				if (j>= interval_from && j<=interval_to) {
+					
+					if (((i+1) % 2) ==0) {
+						newbinchar1[j] = oI1.binchain[j];
+						newbinchar2[j] = oI2.binchain[j];
+					} else {
+						newbinchar1[j] = oI2.binchain[j];
+						newbinchar2[j] = oI1.binchain[j];
+					}
+				}
+			}
+			
 		}
 		
-		//System.out.println("cross between " + oI1 + " and " + oI2 + " -> " + new Individu(newbinchar1) + " and " + new Individu(newbinchar2));
 		
 		Individu[] two_kids = new Individu[2];
 		two_kids[0] = new Individu(newbinchar1);
 		two_kids[1] = new Individu(newbinchar2);
 		
 		return two_kids;
-	
+		
+		//return crossover_1part(oI1, oI2);
 	}
 	
 	
@@ -288,6 +352,9 @@ public Population selection_tournoi_with_elite(int tournament_size, double pct_t
 				0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0,
 				0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+		
+		
+		//int[] tmp_table = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ,1};
 		
 		Population oPop = new Population(size_pop, tmp_table,p_crossover, p_mutation);
 		
