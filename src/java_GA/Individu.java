@@ -41,12 +41,45 @@ public class Individu {
 	}
 	
 	
+	public void mutation(double p_mut) {
+		Random oRandom = new Random();
+		
+		for(int i = 0; i < this.binchain.length; i++) {
+			if (oRandom.nextDouble() <= p_mut) {
+				this.binchain[i] = 1-this.binchain[i];
+				//System.out.println("apply mutation");
+			}
+		}
+	}
+	
 	public void draw() {
 		for(int i = 0; i < this.binchain.length; i++) {
 			System.out.print(this.binchain[i]);
 		}
 		
 	}
+	
+	public void draw_with_transformation(int modulo, String char_for_0, String char_for_1) {
+		String tmpstr = new String();
+		
+		for(int i = 0; i < this.binchain.length; i++) {
+			
+			if (((i+1) % 16) == 0 && i != 0) {
+				tmpstr = tmpstr + System.getProperty("line.separator"); 
+			}
+			
+			if (this.binchain[i] == 0) {
+				tmpstr = tmpstr + char_for_0;
+			} else {
+				tmpstr = tmpstr + char_for_1;
+			}
+			
+		}
+		
+		System.out.println(tmpstr);
+		
+	}
+	
 	
 	public String toString() {
 		String tmpstr = new String();
@@ -57,21 +90,4 @@ public class Individu {
 		return tmpstr;
 	}
 	
-	
-	
-	public static void main(String[] args) {
-		
-		int[] tmp_table = {0,0,1,0,1,0,1,0,1,0};
-		
-		for (int i = 0; i < 4; i++) {
-			Individu oI1 = new Individu(tmp_table.length);
-			oI1.draw();
-			
-			System.out.print(" " + oI1.eval(tmp_table));
-			
-			System.out.println();
-		}
-	}
-	
-
 }
