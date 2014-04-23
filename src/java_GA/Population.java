@@ -1,6 +1,6 @@
 package java_GA;
 import java.util.Random;
-import java.util.ArrayList;;
+import java.util.ArrayList; // pour conserver l historique des populations sans devoir perdre du temps a reconstuire des tableaux lors redimensionnement car le nombre de generation n est pas connu lors de l initialisation de l objet Population
 
 public class Population {
 	
@@ -16,12 +16,15 @@ public class Population {
 	int[] evals; //Array de fitness, les index ne correspondent pas forcement a ceux de la variable de class oIndividus mais a ceux de la variable de class individu_idx_evals suite par exemple a un tri
 	int[] individu_idx_evals;
 	
+	// l un de des parametres du constructeur principal est la methode de selection qui peut etre pickee directement de cette enumeration 
 	public enum Selection_Methods {
 	    tournoi, roulette_roportionnelle, rang
 	}
 	
+	// la methode de selection retenue par l utilisateur
 	Selection_Methods selection_method;
 	
+	// historique des populations a travers les generations
 	ArrayList<Individu[]> histo_pop = new ArrayList<Individu[]>();
 	
 	
@@ -66,7 +69,7 @@ public class Population {
 	
 	/**
 	 * 
-	 * Alias qui imposera la selection par tournoi
+	 * Alias qui imposera la selection par tournoi, si l utilisateur n a pas fait son choix parmis l enumeration Selection_Methods
 	 */
 	public Population(int size_pop, int[] target, double p_crossover, double p_mutation) {
 		this(size_pop, target, Selection_Methods.tournoi, p_crossover, p_mutation);
@@ -180,7 +183,11 @@ public class Population {
 	}
 	
 	
-	
+	/**
+	 * Selection avec roulette biaisee -> proportionnelle au fitness
+	 * 
+	 * @return Population retenue avant la reproduction / mutation
+	 */
 	public Population selection_roulette_proportionnelle() {
 		
 		Population popselect = new Population(this.size_pop);
@@ -218,6 +225,13 @@ public class Population {
 	}
 	
 	
+	/**
+	 * Plutot que de biaiser la roulette avec la fitness, ici seul compte l'ordre des fitness et pas l'ecart entre eux
+	 * 
+	 * Limitation : leger biais, les fitness identiques sont quand meme ordonnes et conduisent donc a des probabilite de selection legerement biaise ex : les fitness : | 2 | 3 | 3 | 10 -> | 0 | 1 | 1 | 2 | 2 | 2 | 3 | alors que l indice 1 et 2 devraient avoir la meme probabilite
+	 * 
+	 * @return Population retenue avant la reproduction / mutation
+	 */
 	public Population selection_rang() {
 		Population popselect = new Population(this.size_pop);
 		popselect.size_pop = 0;
