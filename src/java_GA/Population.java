@@ -1,5 +1,6 @@
 package java_GA;
 import java.util.Random;
+import java.util.ArrayList;;
 
 public class Population {
 	
@@ -15,6 +16,41 @@ public class Population {
 	int[] evals; //Array de fitness, les index ne correspondent pas forcement a ceux de la variable de class oIndividus mais a ceux de la variable de class individu_idx_evals suite par exemple a un tri
 	int[] individu_idx_evals;
 	
+	public enum Selection_Methods {
+	    tournoi, roulette_roportionnelle, rang
+	}
+	
+	Selection_Methods selection_method;
+	
+	ArrayList<Individu[]> histo_pop = new ArrayList<Individu[]>();
+	
+	
+	/**
+	 * Constructeur de la class Population avec creation des Individus aleatoire
+	 * 
+	 * @param size_pop nombre d'objet Individu dans l'Array oIndividus
+	 * @param target solution optimale, pratique car permet de connaitre la taille de l'Array de la representation binaire individus, sera egalement transmise a la fonction d'evaluation du fitness des individus
+	 * @param selection_method  
+	 * @param p_crossover probabilite de crossover
+	 * @param p_mutation probabilite de mutation
+	 */
+	public Population(int size_pop, int[] target, Selection_Methods selection_method, double p_crossover, double p_mutation) {
+		
+		this(size_pop); // demarre avec l initialisation des variables de class en appelant un autre constructeur
+		
+		this.target = target;
+		this.selection_method = selection_method;
+		this.p_crossover = p_crossover;
+		this.p_mutation = p_mutation;
+		
+		//creation des objet Individus aleatoire
+		for (int i = 0; i < oIndividus.length; i++) {
+			oIndividus[i] = new Individu(this.target.length); // se sert dirctement de la taille du benchmark pour etablir size des individus
+			this.size_pop++;
+		}
+	}
+	
+	
 	
 	/**
 	 * Constructeur de la class Population, initialisant uniquement tableau des Individus, ne genere pas les individus
@@ -27,27 +63,13 @@ public class Population {
 		this.oIndividus = new Individu[size_pop];
 	}
 	
+	
 	/**
-	 * Constructeur de la class Population avec creation des Individus aleatoire
 	 * 
-	 * @param size_pop nombre d'objet Individu dans l'Array oIndividus
-	 * @param target solution optimale, pratique car permet de connaitre la taille de l'Array de la representation binaire individus, sera egalement transmise a la fonction d'evaluation du fitness des individus
-	 * @param p_crossover probabilite de crossover
-	 * @param p_mutation probabilite de mutation
+	 * Alias qui imposera la selection par tournoi
 	 */
 	public Population(int size_pop, int[] target, double p_crossover, double p_mutation) {
-		
-		this(size_pop); // demarre avec l initialisation des variables de class en appelant un autre constructeur
-		
-		this.target = target;
-		this.p_crossover = p_crossover;
-		this.p_mutation = p_mutation;
-		
-		//creation des objet Individus aleatoire
-		for (int i = 0; i < oIndividus.length; i++) {
-			oIndividus[i] = new Individu(this.target.length); // se sert dirctement de la taille du benchmark pour etablir size des individus
-			this.size_pop++;
-		}
+		this(size_pop, target, Selection_Methods.tournoi, p_crossover, p_mutation);
 	}
 	
 	
@@ -61,7 +83,7 @@ public class Population {
 	public void generation() {
 		
 		//selection
-		Population popselect = this.selection_tournoi_with_elite(5, 0.1); //population temporaire retenue pour reproduction / mutation
+		Population popselect = this.selection(); //population temporaire retenue pour reproduction / mutation
 		
 		Random oRandom = new Random();
 		
@@ -97,6 +119,7 @@ public class Population {
 		}
 		
 		this.generation_state++;
+		this.histo_pop.add(this.oIndividus);
 		this.oIndividus = popselect.oIndividus;
 		
 		//stats
@@ -104,25 +127,24 @@ public class Population {
 		
 	}
 	
+	
 	/**
+	 * switch/case a travers les differentes methodes de selections possibles
 	 * 
-	 * @deprecated remplacee par selection_tournoi_with_elite
-	 * 
-	 * @param tournament_size le nombre d'individus que l on fait combattre, seul le meilleur sera retenu base sur sa fitness
-	 * @return un nouvel objet Population contenant la population selectionnee pour la reproduction et la mutation
+	 * @return Population retenue avant la reproduction / mutation
 	 */
-	public Population selection_tournoi(int tournament_size) {
+	public Population selection() {
 		
-		Population popselect = new Population(this.size_pop);
-		
-		popselect.size_pop = 0;
-		
-		while (popselect.size_pop < this.size_pop) {
-			popselect.oIndividus[popselect.size_pop] = tournoi(tournament_size);
-			popselect.size_pop++;
+		switch (this.selection_method) {
+			case tournoi:
+				return this.selection_tournoi_with_elite(5, 0.10);
+			case roulette_roportionnelle:
+				return this.selection_roulette_proportionnelle();
+			case rang:
+				return this.selection_rang();
+			default:
+				return this.selection_tournoi_with_elite(5, 0.10);
 		}
-		
-		return popselect;
 	}
 	
 	
@@ -155,6 +177,133 @@ public class Population {
 		}
 		
 		return tmp_sum_fitness / this.size_pop;
+	}
+	
+	
+	
+	public Population selection_roulette_proportionnelle() {
+		
+		Population popselect = new Population(this.size_pop);
+		popselect.size_pop = 0;
+		
+		//rempli un tableau avec les fitness actuels pour chaque individu
+		this.eval_current_state();
+		
+		//calcul la sum de tous les fitness pour construire la roulette biaisee
+		int sum_fitness;
+		sum_fitness = 0;
+		for (int i=0; i<this.size_pop; i++) {
+			sum_fitness += this.evals[i];
+		}
+		
+		
+		int[] roulette = new int[sum_fitness];
+		int k=0;
+		for (int i=0; i<this.size_pop; i++) {
+			for(int j=0; j<this.evals[i]; j++) {
+				roulette[k] = this.individu_idx_evals[i];
+				k++;
+			}
+		}
+		
+		Random oRandom = new Random();
+		
+		while (popselect.size_pop < this.size_pop) {
+			popselect.oIndividus[popselect.size_pop] = this.oIndividus[roulette[oRandom.nextInt(roulette.length)]];
+			popselect.size_pop++;
+		}
+		
+		return popselect;
+		
+	}
+	
+	
+	public Population selection_rang() {
+		Population popselect = new Population(this.size_pop);
+		popselect.size_pop = 0;
+		
+		//rempli un tableau avec les fitness actuels pour chaque individu
+		this.eval_current_state();
+		
+		
+		//sort des fitness, higher first
+		int min_idx;
+		int min_fitness;
+		
+		//tri par bulle
+		for (int i=0; i<this.size_pop; i++) {
+			
+			min_idx = i;
+			min_fitness = this.evals[i];
+			
+			
+			for (int j=i+1; j<this.size_pop; j++) {
+				if (this.evals[j] < min_fitness) {
+					min_fitness = this.evals[j];
+					min_idx = j;
+				}
+			}
+			
+			int tmp_fitness;
+			int tmp_idx;
+			if (min_idx != i) {
+				tmp_idx = individu_idx_evals[i];
+				tmp_fitness = this.evals[i];
+				
+				this.individu_idx_evals[i] =  this.individu_idx_evals[min_idx];
+				this.evals[i] =  this.evals[min_idx];
+				
+				this.individu_idx_evals[min_idx] = tmp_idx;
+				this.evals[min_idx] = tmp_fitness;
+			}
+		}
+		
+		
+		int count_rang = 0;
+		for (int i=0; i<this.size_pop; i++) {
+			count_rang+= i+1;
+		}
+		
+		int[] roulette_rang = new int[count_rang];
+		
+		int k=0;
+		for (int i=0; i<this.size_pop; i++) {
+			for (int j=0; j<=i; j++) {
+				roulette_rang[k] = this.individu_idx_evals[i];
+				k++;
+			}
+		}
+		
+		Random oRandom = new Random();
+		
+		while (popselect.size_pop < this.size_pop) {
+			popselect.oIndividus[popselect.size_pop] = this.oIndividus[roulette_rang[oRandom.nextInt(roulette_rang.length)]];
+			popselect.size_pop++;
+		}
+		
+		
+		return popselect;
+	}
+	
+	/**
+	 * 
+	 * @deprecated remplacee par selection_tournoi_with_elite
+	 * 
+	 * @param tournament_size le nombre d'individus que l on fait combattre, seul le meilleur sera retenu base sur sa fitness
+	 * @return un nouvel objet Population contenant la population selectionnee pour la reproduction et la mutation
+	 */
+	public Population selection_tournoi(int tournament_size) {
+		
+		Population popselect = new Population(this.size_pop);
+		
+		popselect.size_pop = 0;
+		
+		while (popselect.size_pop < this.size_pop) {
+			popselect.oIndividus[popselect.size_pop] = tournoi(tournament_size);
+			popselect.size_pop++;
+		}
+		
+		return popselect;
 	}
 	
 	

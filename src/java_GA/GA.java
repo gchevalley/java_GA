@@ -1,5 +1,7 @@
 package java_GA;
 
+import java_GA.Population.Selection_Methods;
+
 public class GA {
 
 	public static void main(String[] args) {
@@ -24,7 +26,7 @@ public class GA {
 				0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		
-		Population oPop = new Population(size_pop, tmp_table,p_crossover, p_mutation);
+		Population oPop = new Population(size_pop, tmp_table, Selection_Methods.tournoi, p_crossover, p_mutation);
 		
 		for (int i=0; i<nbre_generation; i++) {
 			oPop.generation();
