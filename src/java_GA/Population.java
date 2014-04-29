@@ -1,6 +1,8 @@
 package java_GA;
 import java.util.Random;
+import java.util.Arrays;
 import java.util.ArrayList; // pour conserver l historique des populations sans devoir perdre du temps a reconstuire des tableaux lors redimensionnement car le nombre de generation n est pas connu lors de l initialisation de l objet Population
+import java.util.Comparator;
 
 public class Population {
 	
@@ -12,9 +14,6 @@ public class Population {
 	Individu oIndividus[]; //Array contenant les objets Individu (solutions)
 	int[] target; // solution optimale, pratique pour connaitre la taille des objets Individus a generer et pour calculer leur fitness
 	
-	// pour faciliter les stats
-	int[] evals; //Array de fitness, les index ne correspondent pas forcement a ceux de la variable de class oIndividus mais a ceux de la variable de class individu_idx_evals suite par exemple a un tri
-	int[] individu_idx_evals;
 	
 	// l un de des parametres du constructeur principal est la methode de selection qui peut etre pickee directement de cette enumeration 
 	public enum Selection_Methods {
@@ -142,9 +141,9 @@ public class Population {
 			case tournoi:
 				return this.selection_tournoi_with_elite(5, 0.10);
 			case roulette_roportionnelle:
-				return this.selection_roulette_proportionnelle();
+				return this.selection_roulette_proportionnelle_with_elite(0.10);
 			case rang:
-				return this.selection_rang();
+				return this.selection_rang_with_elite(0.10);
 			default:
 				return this.selection_tournoi_with_elite(5, 0.10);
 		}
@@ -152,17 +151,25 @@ public class Population {
 	
 	
 	/**
-	 * rempli 2 variables de class helpers .evals et .individu_idx_evals, pratique pour effectuer stats et trier les fitness des differents objets Individu constituant la population
+	 * 
+	 * ordonne dans l'ordre descroissant le vecteur oIndividu d'apres le fitness
+	 *
 	 */
-	private void eval_current_state() {
-		
-		this.evals = new int[this.size_pop];
-		this.individu_idx_evals = new int[this.size_pop];
-		
-		for (int i=0; i<this.size_pop; i++) {
-			this.evals[i] = this.oIndividus[i].eval(this.target);
-			this.individu_idx_evals[i] = i;
-		}
+	public class IndividualsComparator implements Comparator<Individu> {
+		 
+		 @Override
+		 public int compare(Individu i1, Individu i2) {
+			 if (i1.eval(target) == i2.eval(target)) return 0;
+			 else if (i1.eval(target) < i2.eval(target)) return 1;
+			 else return -1;
+		 }
+	}
+	
+	/**
+	 * trie le vecteur d'individu de la population dans l'ordre descending car au comparateur si-dessus
+	 */
+	public void eval_current_state() {
+		Arrays.sort(this.oIndividus, new IndividualsComparator());
 	}
 	
 	
@@ -171,12 +178,13 @@ public class Population {
 	 * @return fitness moyen de la population
 	 */
 	public double get_avg_fitness() {
-		//this.eval_current_state();
+		
+		this.eval_current_state();
 		
 		double tmp_sum_fitness;
 		tmp_sum_fitness = 0.0;
 		for (int i=0; i<this.size_pop; i++) {
-			tmp_sum_fitness+= this.oIndividus[i].eval(this.target);
+			tmp_sum_fitness+= this.oIndividus[i].fitness; //peut utiliser .fitness car .eval_current_state() vient de tourner
 		}
 		
 		return tmp_sum_fitness / this.size_pop;
@@ -184,7 +192,42 @@ public class Population {
 	
 	
 	/**
+	 * 
+	 * isole un pourcentage des meilleures individus dans une nouvelle population
+	 * 
+	 * @param pct_to_keep
+	 * @return objet Population, dont la taille si le taux est inferieur a 1 sera plus petite que l'originale
+	 */
+	public Population selection_with_elite(double pct_to_keep) {
+		
+		//nouvelle population temporaire
+		Population popselect = new Population(this.size_pop);
+		popselect.size_pop = 0;
+		
+		//rempli un tableau avec les fitness actuels pour chaque individu
+		this.eval_current_state();
+		
+		
+		// maintenant que les fitness sont tries, on ajoute automatiquement a la population temporaire les meilleurs Individus
+		for (int i=0; i<this.size_pop; i++) {
+			
+			if (((i+1) / (double)this.size_pop) > pct_to_keep)  {
+				break;
+			} else {
+				popselect.oIndividus[popselect.size_pop] = this.oIndividus[i];
+				popselect.size_pop++;
+			}
+			
+		}
+		
+		return popselect;
+	}
+	
+	
+	/**
 	 * Selection avec roulette biaisee -> proportionnelle au fitness
+	 * 
+	 * @deprecated utilise la fonction qui supporte l elite
 	 * 
 	 * @return Population retenue avant la reproduction / mutation
 	 */
@@ -196,25 +239,27 @@ public class Population {
 		//rempli un tableau avec les fitness actuels pour chaque individu
 		this.eval_current_state();
 		
-		//calcul la sum de tous les fitness pour construire la roulette biaisee
+		//calcul la sum de tous les fitness pour connaitre la taille de la roulette biaisee
 		int sum_fitness;
 		sum_fitness = 0;
 		for (int i=0; i<this.size_pop; i++) {
-			sum_fitness += this.evals[i];
+			//sum_fitness += this.oIndividus[i].eval(this.target); //deperecie car trop lent
+			sum_fitness += this.oIndividus[i].fitness; //comme .eval_current_state() a ete appelee, le champs fitness de l individu est a jour
 		}
 		
 		
 		int[] roulette = new int[sum_fitness];
 		int k=0;
-		for (int i=0; i<this.size_pop; i++) {
-			for(int j=0; j<this.evals[i]; j++) {
-				roulette[k] = this.individu_idx_evals[i];
+		for (int i=0; i<this.size_pop; i++) { //parcours tous les individus
+			//for(int j=0; j<this.oIndividus[i].eval(this.target); j++) { //autant de fois que le fitness de l individu
+			for(int j=0; j<this.oIndividus[i].fitness; j++) {
+				roulette[k] = i;
 				k++;
 			}
 		}
 		
 		Random oRandom = new Random();
-		
+		// complete la population temporaire avec tirage aleatoire effectue sur la roulette biaisee
 		while (popselect.size_pop < this.size_pop) {
 			popselect.oIndividus[popselect.size_pop] = this.oIndividus[roulette[oRandom.nextInt(roulette.length)]];
 			popselect.size_pop++;
@@ -226,6 +271,67 @@ public class Population {
 	
 	
 	/**
+	 * Selection avec roulette biaisee -> proportionnelle au fitness
+	 * 
+	 * @param pct_to_keep pourcentage d individu automatiquement retenu pour la population de reproduction / mutation
+	 * @return un nouvel objet Population contenant la population selectionnee pour la reproduction et la mutation
+	 */
+	public Population selection_roulette_proportionnelle_with_elite(double pct_to_keep) {
+		
+		Population popselect = this.selection_with_elite(pct_to_keep);
+		
+		//rempli un tableau avec les fitness actuels pour chaque individu
+		this.eval_current_state();
+		
+		
+		// maintenant que les fitness sont tries, on ajoute automatiquement a la population temporaire les meilleurs Individus
+		for (int i=0; i<this.size_pop; i++) {
+			
+			if (((i+1) / (double)this.size_pop) > pct_to_keep)  {
+				break;
+			} else {
+				popselect.oIndividus[popselect.size_pop] = this.oIndividus[i];
+				popselect.size_pop++;
+			}
+			
+		}
+		
+		
+		
+		//calcul la sum de tous les fitness pour connaitre la taille de la roulette biaisee
+		int sum_fitness;
+		sum_fitness = 0;
+		for (int i=0; i<this.size_pop; i++) {
+			//sum_fitness += this.oIndividus[i].eval(this.target); //deperecie car trop lent
+			sum_fitness += this.oIndividus[i].fitness; //comme .eval_current_state() a ete appelee, le champs fitness de l individu est a jour
+		}
+		
+		
+		int[] roulette = new int[sum_fitness];
+		int k=0;
+		for (int i=0; i<this.size_pop; i++) { //parcours tous les individus
+			//for(int j=0; j<this.oIndividus[i].eval(this.target); j++) { //autant de fois que le fitness de l individu
+			for(int j=0; j<this.oIndividus[i].fitness; j++) {
+				roulette[k] = i;
+				k++;
+			}
+		}
+		
+		Random oRandom = new Random();
+		// complete la population temporaire avec tirage aleatoire effectue sur la roulette biaisee
+		while (popselect.size_pop < this.size_pop) {
+			popselect.oIndividus[popselect.size_pop] = this.oIndividus[roulette[oRandom.nextInt(roulette.length)]];
+			popselect.size_pop++;
+		}
+		
+		return popselect;
+		
+	}
+	
+	
+	
+	/**
+	 * @deprecated utiliser la fonction supportant l elite
 	 * Plutot que de biaiser la roulette avec la fitness, ici seul compte l'ordre des fitness et pas l'ecart entre eux
 	 * 
 	 * Limitation : leger biais, les fitness identiques sont quand meme ordonnes et conduisent donc a des probabilite de selection legerement biaise ex : les fitness : | 2 | 3 | 3 | 10 -> | 0 | 1 | 1 | 2 | 2 | 2 | 3 | alors que l indice 1 et 2 devraient avoir la meme probabilite
@@ -236,41 +342,8 @@ public class Population {
 		Population popselect = new Population(this.size_pop);
 		popselect.size_pop = 0;
 		
-		//rempli un tableau avec les fitness actuels pour chaque individu
-		this.eval_current_state();
-		
-		
 		//sort des fitness, higher first
-		int min_idx;
-		int min_fitness;
-		
-		//tri par bulle
-		for (int i=0; i<this.size_pop; i++) {
-			
-			min_idx = i;
-			min_fitness = this.evals[i];
-			
-			
-			for (int j=i+1; j<this.size_pop; j++) {
-				if (this.evals[j] < min_fitness) {
-					min_fitness = this.evals[j];
-					min_idx = j;
-				}
-			}
-			
-			int tmp_fitness;
-			int tmp_idx;
-			if (min_idx != i) {
-				tmp_idx = individu_idx_evals[i];
-				tmp_fitness = this.evals[i];
-				
-				this.individu_idx_evals[i] =  this.individu_idx_evals[min_idx];
-				this.evals[i] =  this.evals[min_idx];
-				
-				this.individu_idx_evals[min_idx] = tmp_idx;
-				this.evals[min_idx] = tmp_fitness;
-			}
-		}
+		this.eval_current_state();
 		
 		
 		int count_rang = 0;
@@ -282,8 +355,8 @@ public class Population {
 		
 		int k=0;
 		for (int i=0; i<this.size_pop; i++) {
-			for (int j=0; j<=i; j++) {
-				roulette_rang[k] = this.individu_idx_evals[i];
+			for (int j=1; j<=this.size_pop-i; j++) {
+				roulette_rang[k] = i;
 				k++;
 			}
 		}
@@ -298,6 +371,49 @@ public class Population {
 		
 		return popselect;
 	}
+	
+	
+	/**
+	 * Plutot que de biaiser la roulette avec la fitness, ici seul compte l'ordre des fitness et pas l'ecart entre eux
+	 * 
+	 * Limitation : leger biais, les fitness identiques sont quand meme ordonnes et conduisent donc a des probabilite de selection legerement biaise ex : les fitness : | 2 | 3 | 3 | 10 -> | 0 | 1 | 1 | 2 | 2 | 2 | 3 | alors que l indice 1 et 2 devraient avoir la meme probabilite
+	 * 
+	 * @return Population retenue avant la reproduction / mutation
+	 */
+	public Population selection_rang_with_elite(double pct_to_keep) {
+		
+		Population popselect = this.selection_with_elite(pct_to_keep);
+		
+		//sort des fitness, higher first
+		this.eval_current_state();
+		
+		
+		int count_rang = 0;
+		for (int i=0; i<this.size_pop; i++) {
+			count_rang+= i+1;
+		}
+		
+		int[] roulette_rang = new int[count_rang];
+		
+		int k=0;
+		for (int i=0; i<this.size_pop; i++) {
+			for (int j=1; j<=this.size_pop-i; j++) {
+				roulette_rang[k] = i;
+				k++;
+			}
+		}
+		
+		Random oRandom = new Random();
+		
+		while (popselect.size_pop < this.size_pop) {
+			popselect.oIndividus[popselect.size_pop] = this.oIndividus[roulette_rang[oRandom.nextInt(roulette_rang.length)]];
+			popselect.size_pop++;
+		}
+		
+		
+		return popselect;
+	}
+	
 	
 	/**
 	 * 
@@ -332,50 +448,10 @@ public class Population {
 	 */
 	public Population selection_tournoi_with_elite(int tournament_size, double pct_to_keep) {
 		
-		Population popselect = new Population(this.size_pop);
-		popselect.size_pop = 0;
+		Population popselect = this.selection_with_elite(pct_to_keep);
 		
 		//rempli un tableau avec les fitness actuels pour chaque individu
 		this.eval_current_state();
-		
-		
-		//sort des fitness, higher first
-		int max_idx;
-		int max_fitness;
-		
-		//tri par bulle
-		for (int i=0; i<this.size_pop; i++) {
-			
-			if (((i+1) / (double)this.size_pop) > pct_to_keep)  { // ne pas oublier le cast en double pour eviter d avoir le resulat d une division entiere
-				break; //pas besoin de trier la totalite des fitness, on s arrete une fois le pourcentage choisi par l utilisateur est atteint
-				
-			} else {
-			
-				max_idx = i;
-				max_fitness = this.evals[i];
-				
-				
-				for (int j=i+1; j<this.size_pop; j++) {
-					if (this.evals[j] > max_fitness) {
-						max_fitness = this.evals[j];
-						max_idx = j;
-					}
-				}
-				
-				int tmp_fitness;
-				int tmp_idx;
-				if (max_idx != i) {
-					tmp_idx = individu_idx_evals[i];
-					tmp_fitness = this.evals[i];
-					
-					this.individu_idx_evals[i] =  this.individu_idx_evals[max_idx];
-					this.evals[i] =  this.evals[max_idx];
-					
-					this.individu_idx_evals[max_idx] = tmp_idx;
-					this.evals[max_idx] = tmp_fitness;
-				}
-			}
-		}
 		
 		
 		// maintenant que les fitness sont tries, on ajoute automatiquement a la population temporaire les meilleurs Individus
@@ -384,7 +460,7 @@ public class Population {
 			if (((i+1) / (double)this.size_pop) > pct_to_keep)  {
 				break;
 			} else {
-				popselect.oIndividus[popselect.size_pop] = this.oIndividus[this.individu_idx_evals[i]];
+				popselect.oIndividus[popselect.size_pop] = this.oIndividus[i];
 				popselect.size_pop++;
 			}
 			
@@ -418,9 +494,11 @@ public class Population {
 		for (int i = 0; i < tsize; i++) {
 			tmp_idx = oRandom.nextInt(this.size_pop);
 			
-			if (this.oIndividus[tmp_idx].eval(this.target) > value_max) { // si dipose d une meilleure fitness devient le meilleur
+			//if (this.oIndividus[tmp_idx].eval(this.target) > value_max) { // si dipose d une meilleure fitness devient le meilleur
+			if (this.oIndividus[tmp_idx].fitness > value_max) { // besoin que .eval_current_state() ait tourne pour utiliser cette variable de class
 				idx_max = tmp_idx;
-				value_max = this.oIndividus[tmp_idx].eval(this.target);
+				//value_max = this.oIndividus[tmp_idx].eval(this.target);
+				value_max = this.oIndividus[tmp_idx].fitness;
 			}
 		}
 		
@@ -433,7 +511,7 @@ public class Population {
 	 * @param oI1 parent numero 1
 	 * @param oI2 parent numero 2
 	 * @param nbre_separator nombre de points choisis de maniere aleatoire ou les genes seront coupes
-	 * @return Array de 2 objets Individu
+	 * @return Array de 2 objets Individu (enfants)
 	 */
 	public Individu[] crossover(Individu oI1, Individu oI2, int nbre_separator) {
 		
@@ -550,22 +628,9 @@ public class Population {
 	 * @return l'objet Individu issu de la varaible de class Array oIndividus avec la meilleure fitness
 	 */
 	public Individu getBestIndividu() {
-		int idx_max = 0;
-		int max_eval;
-		int tmp_eval;
 		
-		max_eval = this.oIndividus[0].eval(this.target);
-		
-		for (int i = 1; i < this.oIndividus.length; i++) {
-			tmp_eval =  this.oIndividus[i].eval(this.target);
-			if (tmp_eval > max_eval) {
-				max_eval = tmp_eval;
-				idx_max = i;
-			}
-				
-		}
-		
-		return this.oIndividus[idx_max];
+		this.eval_current_state();
+		return this.oIndividus[0];
 		
 	}
 

@@ -5,7 +5,7 @@ import java.util.Random;
 public class Individu {
 	
 	int[] binchain; // Array represenant la chaine binaire de l'objet Individu
-	
+	int fitness = 0;
 	
 	/**
 	 * Constructor d un objet Individu avec une chaine binaire aleatoire
@@ -49,6 +49,8 @@ public class Individu {
 				value++;
 			}
 		}
+		
+		this.fitness = value;
 		
 		return value;
 	}
